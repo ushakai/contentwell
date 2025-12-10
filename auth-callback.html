@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .container {
+            text-align: center;
+            padding: 2rem;
+            max-width: 500px;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid white;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .message {
+            font-size: 1.2rem;
+            margin-top: 1rem;
+        }
+
+        .success-box {
+            background: white;
+            color: #333;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .success-box h2 {
+            color: #10b981;
+            margin: 0 0 1rem 0;
+        }
+
+        .success-box p {
+            margin: 0.5rem 0;
+        }
+
+        .close-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-top: 1.5rem;
+            transition: background 0.2s;
+        }
+
+        .close-btn:hover {
+            background: #5568d3;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="spinner" id="spinner"></div>
+        <div class="message" id="message">Completing authentication...</div>
+    </div>
+
+    <script type="module">
+        import {
+            createClient
+        } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+        const supabaseUrl = 'https://rpbprscvagtgjyugirtc.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJwYnByc2N2YWd0Z2p5dWdpcnRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgxOTgyMDgsImV4cCI6MjA3Mzc3NDIwOH0.6zt6_vzN3H6CGkBrzTA9PDEEM2eVs7H-TPYM0zFRKNM';
+
+        const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+            auth: {
+                storage: {
+                    getItem: () => null,
+                    setItem: () => { },
+                    removeItem: () => { },
+                },
+                persistSession: false,
+                detectSessionInUrl: true
+            }
+        });
+
+        async function handleCallback() {
+            try {
+                const messageEl = document.getElementById('message');
+                const spinnerEl = document.getElementById('spinner');
+
+                console.log('[Callback] Starting authentication callback...');
+
+                // Get session from Supabase
+                const {
+                    data,
+                    error
+                } = await supabase.auth.getSession();
+
+                if (error) throw error;
+
+                if (data.session) {
+                    console.log('[Callback] ✅ Session found!', {
+                        user: data.session.user.id,
+                        provider: data.session.user.app_metadata.provider,
+                        hasToken: !!data.session.provider_token
+                    });
+
+                    messageEl.textContent = 'Authentication successful!';
+
+                    // Try popup communication first
+                    if (window.opener && !window.opener.closed) {
+                        console.log('[Callback] Sending to parent window (popup mode)');
+
+                        window.opener.postMessage({
+                            type: 'OAUTH_SUCCESS',
+                            session: data.session
+                        }, window.location.origin);
+
+                        spinnerEl.style.display = 'none';
+                        messageEl.innerHTML = `
+                            <div class="success-box">
+                                <h2>✅ Connected!</h2>
+                                <p>Closing window...</p>
+                            </div>
+                        `;
+
+                        setTimeout(() => window.close(), 1500);
+                    } else {
+                        // New tab mode - use localStorage
+                        console.log('[Callback] No opener - using localStorage (tab mode)');
+
+                        localStorage.setItem('oauth_session', JSON.stringify(data.session));
+                        localStorage.setItem('oauth_success', 'true');
+                        localStorage.setItem('oauth_timestamp', Date.now().toString());
+
+                        const provider = data.session.user.app_metadata.provider || 'account';
+
+                        spinnerEl.style.display = 'none';
+                        messageEl.innerHTML = `
+                            <div class="success-box">
+                                <h2>✅ Authentication Successful!</h2>
+                                <p>Your <strong>${provider}</strong> account has been connected.</p>
+                                <p style="font-size: 0.9rem; color: #666; margin-top: 1rem;">
+                                    Redirecting you back to the app...
+                                </p>
+                                <button class="close-btn" onclick="window.close()">Close This Tab</button>
+                            </div>
+                        `;
+
+                        // Redirect back to main app
+                        setTimeout(() => {
+                            window.location.href = '/';
+                        }, 2000);
+                    }
+                } else {
+                    throw new Error('No session found in callback');
+                }
+            } catch (error) {
+                console.error('[Callback] ❌ Error:', error);
+
+                const messageEl = document.getElementById('message');
+                const spinnerEl = document.getElementById('spinner');
+
+                spinnerEl.style.display = 'none';
+                messageEl.innerHTML = `
+                    <div class="success-box" style="border-left: 4px solid #ef4444;">
+                        <h2 style="color: #ef4444;">❌ Authentication Failed</h2>
+                        <p style="color: #666;">${error.message}</p>
+                        <p style="font-size: 0.9rem; color: #999; margin-top: 1rem;">
+                            Please close this window and try again.
+                        </p>
+                        <button class="close-btn" style="background: #ef4444;" onclick="window.close()">Close</button>
+                    </div>
+                `;
+
+                // Send error to parent if available
+                if (window.opener && !window.opener.closed) {
+                    window.opener.postMessage({
+                        type: 'OAUTH_ERROR',
+                        error: error.message
+                    }, window.location.origin);
+                }
+            }
+        }
+
+        // Run callback handler
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', handleCallback);
+        } else {
+            handleCallback();
+        }
+    </script>
+</body>
+
+</html>

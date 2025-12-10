@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Twitter Authentication</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background: #000;
+            color: white;
+        }
+
+        .container {
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid #1d9bf0;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .error {
+            color: #ef4444;
+            margin-top: 1rem;
+        }
+
+        .success {
+            color: #10b981;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="spinner" id="spinner"></div>
+        <div id="message">Connecting to X (Twitter)...</div>
+    </div>
+
+    <script>
+        async function handleCallback() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            const state = urlParams.get('state');
+            const error = urlParams.get('error');
+
+            const messageEl = document.getElementById('message');
+            const spinnerEl = document.getElementById('spinner');
+
+            if (error) {
+                spinnerEl.style.display = 'none';
+                messageEl.innerHTML = `<div class="error">Error: ${error}</div>`;
+                return;
+            }
+
+            if (!code) {
+                spinnerEl.style.display = 'none';
+                messageEl.innerHTML = `<div class="error">No authorization code found.</div>`;
+                return;
+            }
+
+            // Retrieve stored values
+            const storedState = localStorage.getItem('twitter_state');
+            const codeVerifier = localStorage.getItem('twitter_code_verifier');
+            const clientId = localStorage.getItem('twitter_client_id');
+            const redirectUri = localStorage.getItem('twitter_redirect_uri');
+
+            if (state !== storedState) {
+                spinnerEl.style.display = 'none';
+                messageEl.innerHTML = `<div class="error">State mismatch. Security check failed.</div>`;
+                return;
+            }
+
+            try {
+                messageEl.textContent = 'Exchanging code for tokens...';
+
+                // Exchange code for token
+                // Using corsproxy.io to bypass CORS restrictions in browser
+                const proxyUrl = 'https://corsproxy.io/?';
+                const targetUrl = 'https://api.twitter.com/2/oauth2/token';
+
+                const response = await fetch(proxyUrl + encodeURIComponent(targetUrl), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        code: code,
+                        grant_type: 'authorization_code',
+                        client_id: clientId,
+                        redirect_uri: redirectUri,
+                        code_verifier: codeVerifier
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error_description || data.error || 'Failed to exchange token');
+                }
+
+                // Success! Send back to main window
+                messageEl.innerHTML = `<div class="success">Connected! Closing window...</div>`;
+
+                if (window.opener) {
+                    window.opener.postMessage({
+                        type: 'TWITTER_OAUTH_SUCCESS',
+                        data: data
+                    }, window.location.origin);
+
+                    setTimeout(() => window.close(), 1500);
+                }
+
+            } catch (err) {
+                console.error('Token Exchange Error:', err);
+                spinnerEl.style.display = 'none';
+                messageEl.innerHTML = `
+                    <div class="error">
+                        <h3>Connection Failed</h3>
+                        <p>${err.message}</p>
+                        <p style="font-size:0.8em; color:#888; margin-top:10px;">
+                            Note: If this is a CORS error, you may need a backend proxy.
+                        </p>
+                    </div>
+                `;
+            }
+        }
+
+        handleCallback();
+    </script>
+</body>
+
+</html>

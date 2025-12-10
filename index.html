@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Purple AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "react/": "https://aistudiocdn.com/react@^19.2.0/",
+          "react": "https://aistudiocdn.com/react@^19.2.0",
+          "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.1",
+          "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+          "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.45.0"
+        }
+      }
+    </script>
+    <style>
+      @layer base {
+        :root {
+          /* Core Palette */
+          --main-blue: 222 91% 51%;
+          --dark-blue: 231 91% 24%;
+          --light-blue: 196 65% 86%;
+          --brand-orange: 36 98% 48%;
+          --brand-red: 6 73% 54%;
+          --info-blue: 194 69% 59%;
+
+          /* Semantic Tokens (Light Mode) */
+          --background: 0 0% 98%;
+          --foreground: 231 91% 24%;
+
+          --card: 0 0% 100%;
+          --card-foreground: 231 91% 24%;
+
+          --popover: 0 0% 100%;
+          --popover-foreground: 231 91% 24%;
+
+          --primary: 222 91% 51%;
+          --primary-foreground: 0 0% 100%;
+
+          --secondary: 196 65% 86%;
+          --secondary-foreground: 231 91% 24%;
+
+          --muted: 0 0% 96%;
+          --muted-foreground: 0 0% 45%;
+
+          --accent: 196 65% 86%;
+          --accent-foreground: 231 91% 24%;
+
+          --destructive: 6 73% 54%;
+          --destructive-foreground: 0 0% 100%;
+          
+          --info: 194 69% 59%;
+          --info-foreground: 231 91% 24%;
+
+          --warning: 36 98% 48%;
+          --warning-foreground: 231 91% 24%;
+          
+          --border: 0 0% 90%;
+          --input: 0 0% 90%;
+          --ring: 222 91% 51%;
+
+          --radius: 0.75rem;
+
+          --sidebar-background: 0 0% 100%;
+          --sidebar-foreground: 231 91% 24%;
+          --sidebar-active: 222 91% 51%;
+          --sidebar-border: 0 0% 93%;
+        }
+      }
+      
+      @layer base {
+        * {
+          @apply border-border;
+        }
+        body {
+          @apply bg-background text-foreground antialiased;
+        }
+      }
+
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .animate-fade-in-up {
+        animation: fadeInUp 0.5s ease-in-out;
+      }
+    </style>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              border: 'hsl(var(--border))',
+              input: 'hsl(var(--input))',
+              ring: 'hsl(var(--ring))',
+              background: 'hsl(var(--background))',
+              foreground: 'hsl(var(--foreground))',
+              primary: {
+                DEFAULT: 'hsl(var(--primary))',
+                foreground: 'hsl(var(--primary-foreground))',
+              },
+              secondary: {
+                DEFAULT: 'hsl(var(--secondary))',
+                foreground: 'hsl(var(--secondary-foreground))',
+              },
+              destructive: {
+                DEFAULT: 'hsl(var(--destructive))',
+                foreground: 'hsl(var(--destructive-foreground))',
+              },
+              info: {
+                DEFAULT: 'hsl(var(--info))',
+                foreground: 'hsl(var(--info-foreground))',
+              },
+              warning: {
+                DEFAULT: 'hsl(var(--warning))',
+                foreground: 'hsl(var(--warning-foreground))',
+              },
+              muted: {
+                DEFAULT: 'hsl(var(--muted))',
+                foreground: 'hsl(var(--muted-foreground))',
+              },
+              accent: {
+                DEFAULT: 'hsl(var(--accent))',
+                foreground: 'hsl(var(--accent-foreground))',
+              },
+              popover: {
+                DEFAULT: 'hsl(var(--popover))',
+                foreground: 'hsl(var(--popover-foreground))',
+              },
+              card: {
+                DEFAULT: 'hsl(var(--card))',
+                foreground: 'hsl(var(--card-foreground))',
+              },
+              sidebar: {
+                background: 'hsl(var(--sidebar-background))',
+                foreground: 'hsl(var(--sidebar-foreground))',
+                active: 'hsl(var(--sidebar-active))',
+                border: 'hsl(var(--sidebar-border))',
+              }
+            },
+            borderRadius: {
+              lg: `var(--radius)`,
+              md: `calc(var(--radius) - 2px)`,
+              sm: `calc(var(--radius) - 4px)`,
+            },
+          }
+        }
+      }
+    </script>
+  <link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
