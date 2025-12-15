@@ -99,10 +99,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const expiresAt = new Date(Date.now() + expires_in * 1000).toISOString();
 
         // Initialize Supabase client
-        const supabase = createClient(
-            process.env.VITE_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!
-        );
+        // Initialize Supabase client
+        const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+        if (!supabaseUrl || !supabaseKey) {
+            console.error('CRITICAL: Missing Supabase config', { url: !!supabaseUrl, key: !!supabaseKey });
+            throw new Error('Server misconfiguration: Missing Supabase credentials');
+        }
+
+        const supabase = createClient(supabaseUrl, supabaseKey);
 
         // Store credentials in database (upsert to handle reconnections)
         const { error: dbError } = await supabase
