@@ -351,7 +351,7 @@ const SocialConnections: React.FC = () => {
             client_id: clientId,
             redirect_uri: redirectUri,
             state: state,
-            code_challenge: codeVerifier, // Note: using verifier instead of challenge? Wait, let me check lines 335/351 in original logic
+            code_challenge: codeChallenge,
             code_challenge_method: 'S256'
         });
 
