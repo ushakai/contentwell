@@ -8,6 +8,16 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       host: '0.0.0.0',
+      proxy: {
+        '/api/linkedin': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+        },
+        '/api/twitter': {
+          target: 'http://localhost:3002',
+          changeOrigin: true,
+        }
+      }
     },
     plugins: [react()],
     build: {
@@ -16,6 +26,7 @@ export default defineConfig(({ mode }) => {
           main: path.resolve(__dirname, 'index.html'),
           callback: path.resolve(__dirname, 'auth-callback.html'),
           twitter_callback: path.resolve(__dirname, 'twitter-callback.html'),
+          linkedin_callback: path.resolve(__dirname, 'linkedin-callback.html'),
         },
       },
     },

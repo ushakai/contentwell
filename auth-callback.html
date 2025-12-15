@@ -92,21 +92,18 @@
     <script type="module">
         import {
             createClient
-        } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+        } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/+esm';
 
         const supabaseUrl = 'https://rpbprscvagtgjyugirtc.supabase.co';
         const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJwYnByc2N2YWd0Z2p5dWdpcnRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgxOTgyMDgsImV4cCI6MjA3Mzc3NDIwOH0.6zt6_vzN3H6CGkBrzTA9PDEEM2eVs7H-TPYM0zFRKNM';
 
-        const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-            auth: {
-                storage: {
-                    getItem: () => null,
-                    setItem: () => { },
-                    removeItem: () => { },
-                },
-                persistSession: false,
-                detectSessionInUrl: true
-            }
+        console.log('🔧 Creating Supabase client...');
+
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+        console.log('✅ Supabase client created:', {
+            hasAuth: !!supabase?.auth,
+            hasClient: !!supabase
         });
 
         async function handleCallback() {
@@ -115,6 +112,14 @@
                 const spinnerEl = document.getElementById('spinner');
 
                 console.log('[Callback] Starting authentication callback...');
+                console.log('[Callback] Supabase client:', {
+                    hasAuth: !!supabase.auth,
+                    url: supabaseUrl
+                });
+
+                if (!supabase.auth) {
+                    throw new Error('Supabase auth client is null - initialization failed');
+                }
 
                 // Get session from Supabase
                 const {

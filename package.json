@@ -4,11 +4,15 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently \"vite\" \"node server/linkedin-api.js\" \"node server/twitter-api.js\"",
+    "dev:vite-only": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "api": "node server/save-campaign.js",
-    "dev:full": "concurrently \"vite\" \"node server/save-campaign.js\""
+    "linkedin-api": "node server/linkedin-api.js",
+    "twitter-api": "node server/twitter-api.js",
+    "dev:full": "concurrently \"vite\" \"node server/save-campaign.js\"",
+    "dev:linkedin": "concurrently \"vite\" \"node server/linkedin-api.js\""
   },
   "dependencies": {
     "@google/genai": "^1.29.1",
@@ -16,7 +20,9 @@
     "@supabase/supabase-js": "^2.45.0",
     "axios": "^1.13.2",
     "concurrently": "^9.2.1",
+    "cors": "^2.8.5",
     "date-fns": "^4.1.0",
+    "dotenv": "^16.4.5",
     "express": "^5.1.0",
     "papaparse": "^5.5.3",
     "react": "^19.2.0",
@@ -27,6 +33,7 @@
     "@types/node": "^22.19.1",
     "@types/papaparse": "^5.5.0",
     "@types/uuid": "^10.0.0",
+    "@vercel/node": "^2.3.0",
     "@vitejs/plugin-react": "^5.0.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"

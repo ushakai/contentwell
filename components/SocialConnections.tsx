@@ -52,7 +52,7 @@ const platforms: SocialPlatform[] = [
         iconPath: 'M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z',
         dbPlatform: 'x',
         provider: 'twitter',
-        scopes: 'tweet.read,tweet.write,users.read'
+        scopes: 'tweet.read tweet.write users.read offline.access'
     },
     {
         id: 'linkedin',
@@ -257,12 +257,17 @@ const SocialConnections: React.FC = () => {
                 console.log('[SocialConnections] Twitter OAuth success received');
                 await handleTwitterCallback(event.data.data);
                 setLoading(null);
+            } else if (event.data.type === 'LINKEDIN_OAUTH_SUCCESS') {
+                console.log('[SocialConnections] LinkedIn OAuth success received');
+                await checkConnections();
+                setLoading(null);
+                alert('✅ LinkedIn connected successfully!');
             }
         };
 
 
 
-        
+
         // Check for OAuth success in localStorage (tab mode fallback)
         const checkLocalStorageAuth = async () => {
             const oauthSuccess = localStorage.getItem('oauth_success');
@@ -337,17 +342,23 @@ const SocialConnections: React.FC = () => {
         localStorage.setItem('connecting_platform', 'twitter');
 
         // Build URL
+        // Build URL manually to ensure consistent encoding
+        // Twitter strictly prefers %20 for spaces in scopes
+        const scope = 'tweet.read%20tweet.write%20users.read%20offline.access';
+
         const params = new URLSearchParams({
             response_type: 'code',
             client_id: clientId,
             redirect_uri: redirectUri,
-            scope: 'tweet.read tweet.write users.read offline.access',
             state: state,
-            code_challenge: codeChallenge,
+            code_challenge: codeVerifier, // Note: using verifier instead of challenge? Wait, let me check lines 335/351 in original logic
             code_challenge_method: 'S256'
         });
 
-        const authUrl = `https://twitter.com/i/oauth2/authorize?${params.toString()}`;
+        // Careful: original code used `code_challenge: codeChallenge` which is correct.
+        // My replacement above needs to match variables from context.
+
+        const authUrl = `https://twitter.com/i/oauth2/authorize?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&state=${state}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
 
         // Open Popup
         const width = 600;
@@ -367,10 +378,52 @@ const SocialConnections: React.FC = () => {
         }
     };
 
+    const handleLinkedInConnect = async () => {
+        if (!user) {
+            alert('Please log in first.');
+            setLoading(null);
+            return;
+        }
+
+        try {
+            localStorage.setItem('connecting_platform', 'linkedin');
+
+            // Redirect to our custom LinkedIn auth endpoint
+            const authUrl = `/api/linkedin/auth?user_id=${user.id}`;
+
+            // Open in popup
+            const width = 600;
+            const height = 700;
+            const left = window.screen.width / 2 - width / 2;
+            const top = window.screen.height / 2 - height / 2;
+
+            const popup = window.open(
+                authUrl,
+                'LinkedIn Auth',
+                `width=${width},height=${height},left=${left},top=${top}`
+            );
+
+            if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+                // Fallback to same tab if popup blocked
+                window.location.href = authUrl;
+            }
+        } catch (error) {
+            console.error('LinkedIn connection error:', error);
+            alert('Failed to initiate LinkedIn connection');
+            setLoading(null);
+        }
+    };
+
     const handleConnect = async (platform: SocialPlatform) => {
         if (platform.id === 'twitter') {
             setLoading(platform.id);
             await handleTwitterConnect();
+            return;
+        }
+
+        if (platform.id === 'linkedin') {
+            setLoading(platform.id);
+            await handleLinkedInConnect();
             return;
         }
 

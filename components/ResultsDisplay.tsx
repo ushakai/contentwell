@@ -354,66 +354,28 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
   ) => {
     console.log('[Twitter] Publishing tweet...');
 
-    // Twitter's character limit is 280
-    const TWITTER_CHAR_LIMIT = 280;
-
-    let tweetText = text;
-
-    // Ensure text fits within limit
-    if (text.length > TWITTER_CHAR_LIMIT) {
-      tweetText = text.substring(0, TWITTER_CHAR_LIMIT - 3) + '...';
+    if (!user) {
+      throw new Error('User not authenticated');
     }
 
-    const tweetData: any = { text: tweetText };
-
-    // Note: Twitter's media upload API requires OAuth 1.0a (not supported client-side)
-    // Instead, we append the image URL which Twitter will render as a preview card
-    if (imageUrl) {
-      console.log('[Twitter] ⚠️ Appending image as URL (native upload requires backend with OAuth 1.0a)');
-      const URL_LENGTH = 23; // Twitter's t.co URL length
-      const availableChars = TWITTER_CHAR_LIMIT - URL_LENGTH - 1;
-
-      if (tweetText.length > availableChars) {
-        tweetText = tweetText.substring(0, availableChars - 3) + '...';
-      }
-
-      tweetData.text = tweetText + ` ${imageUrl}`;
-      console.log('[Twitter] Image URL added - Twitter will show preview card');
-    }
-
-    console.log('[Twitter] Tweet data:', {
-      textLength: tweetText.length,
-      hasMedia: !!tweetData.media
-    });
-
-    // Step 4: Post the tweet
-    const proxyUrl = 'https://corsproxy.io/?';
-    const targetUrl = 'https://api.twitter.com/2/tweets';
-
-    const response = await fetch(proxyUrl + encodeURIComponent(targetUrl), {
+    // Call our Twitter API endpoint
+    const response = await fetch('/api/twitter/post', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(tweetData)
+      body: JSON.stringify({
+        userId: user.id,
+        text: text,
+        imageUrl: imageUrl
+      })
     });
-
-    // Check if response is JSON
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      console.error('[Twitter] Non-JSON response from proxy:', await response.text());
-      throw new Error('CORS proxy returned invalid response. The proxy service may be down.');
-    }
 
     const data = await response.json();
 
-    if (!response.ok || data.errors) {
+    if (!response.ok) {
       console.error('[Twitter] API Error:', data);
-      const errorMsg = data.detail
-        || (data.errors && data.errors[0]?.message)
-        || 'Failed to post tweet';
-      throw new Error(errorMsg);
+      throw new Error(data.error || 'Failed to post to Twitter');
     }
 
     console.log('[Twitter] Published successfully:', data);
@@ -496,14 +458,40 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
     return publishData;
   };
 
-  // LinkedIn Publishing (placeholder)
+  // LinkedIn Publishing
   const publishToLinkedIn = async (
     text: string,
     imageUrl: string | undefined,
     accessToken: string
   ) => {
-    // LinkedIn Share API implementation would go here
-    throw new Error('LinkedIn publishing coming soon');
+    console.log('[LinkedIn] Publishing post...');
+
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    // Call our LinkedIn API endpoint
+    const response = await fetch('/api/linkedin/post', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId: user.id,
+        text: text,
+        imageUrl: imageUrl
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('[LinkedIn] API Error:', data);
+      throw new Error(data.error || 'Failed to post to LinkedIn');
+    }
+
+    console.log('[LinkedIn] Published successfully:', data);
+    return data;
   };
 
   // Save entire campaign to Google Drive
@@ -513,7 +501,6 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
       console.log('[Google Drive] Starting save process...');
 
       // 1. Get User & Credentials
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
       const { data: credentials, error: credError } = await supabase

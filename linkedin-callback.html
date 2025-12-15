@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedIn Authentication</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #0077B5 0%, #00A0DC 100%);
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 2rem;
+        }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid white;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .success {
+            font-size: 48px;
+            margin-bottom: 1rem;
+        }
+        .error {
+            color: #ff6b6b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <h2>Connecting LinkedIn...</h2>
+        <p>Please wait while we complete the authentication.</p>
+    </div>
+
+    <script>
+        (async function() {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const success = params.get('success');
+                const error = params.get('error');
+                const name = params.get('name');
+
+                if (success === 'linkedin_connected') {
+                    // Show success message
+                    document.querySelector('.container').innerHTML = `
+                        <div class="success">✅</div>
+                        <h2>LinkedIn Connected!</h2>
+                        <p>Welcome, ${decodeURIComponent(name || 'LinkedIn User')}!</p>
+                        <p style="opacity: 0.8; font-size: 14px;">This window will close automatically...</p>
+                    `;
+
+                    // Notify parent window
+                    if (window.opener) {
+                        window.opener.postMessage({
+                            type: 'LINKEDIN_OAUTH_SUCCESS',
+                            platform: 'linkedin'
+                        }, window.location.origin);
+                    }
+
+                    // Close popup after 2 seconds
+                    setTimeout(() => {
+                        window.close();
+                    }, 2000);
+
+                } else if (error) {
+                    // Show error message
+                    document.querySelector('.container').innerHTML = `
+                        <div class="success error">❌</div>
+                        <h2>Connection Failed</h2>
+                        <p>${decodeURIComponent(params.get('message') || 'An error occurred')}</p>
+                        <p style="opacity: 0.8; font-size: 14px;">This window will close automatically...</p>
+                    `;
+
+                    // Notify parent window of error
+                    if (window.opener) {
+                        window.opener.postMessage({
+                            type: 'OAUTH_ERROR',
+                            error: error
+                        }, window.location.origin);
+                    }
+
+                    // Close popup after 3 seconds
+                    setTimeout(() => {
+                        window.close();
+                    }, 3000);
+                }
+
+            } catch (err) {
+                console.error('LinkedIn callback error:', err);
+                document.querySelector('.container').innerHTML = `
+                    <div class="success error">❌</div>
+                    <h2>Unexpected Error</h2>
+                    <p>Please close this window and try again.</p>
+                `;
+            }
+        })();
+    </script>
+</body>
+</html>
