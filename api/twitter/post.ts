@@ -23,12 +23,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Initialize Supabase to get tokens
         // We use the Service Role Key to securely access the credentials table
-        const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+        const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
         if (!supabaseUrl || !supabaseKey) {
-            console.error('Supabase environment variables missing');
-            return res.status(500).json({ error: 'Server configuration error' });
+            console.error('CRITICAL: Missing Supabase config', { url: !!supabaseUrl, key: !!supabaseKey });
+            throw new Error('Server configuration error: Missing Supabase credentials');
         }
 
         const supabase = createClient(supabaseUrl, supabaseKey);

@@ -119,14 +119,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 access_token: access_token,
                 refresh_token: null, // LinkedIn doesn't provide refresh tokens
                 expires_at: expiresAt,
-                scope: scope,
-                profile_id: linkedinId,
-                profile_data: {
-                    name,
+                scopes: scope ? scope.split(' ') : [],
+
+                // Map to existing columns
+                account_id: linkedinId,
+                account_name: name,
+
+                // Store extra details in 'metadata' (JSONB)
+                metadata: {
                     email,
                     picture,
-                    linkedinId
+                    linkedinId,
+                    profile_url: null
                 },
+
                 updated_at: new Date().toISOString()
             }, {
                 onConflict: 'user_id,platform'
