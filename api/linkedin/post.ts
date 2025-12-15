@@ -65,7 +65,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         const accessToken = credentials.access_token;
-        const profileId = credentials.profile_id;
+        // Map account_id (from DB) to profileId (used in logic below)
+        const profileId = credentials.account_id;
+
+        if (!profileId) {
+            console.error('LinkedIn Profile ID missing in credentials');
+            return res.status(500).json({ error: 'LinkedIn profile ID not found. Please reconnect account.' });
+        }
 
         // Prepare the post payload
         const postPayload: any = {
