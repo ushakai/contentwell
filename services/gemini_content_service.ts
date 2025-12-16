@@ -121,8 +121,13 @@ RETURN ONLY VALID JSON IN THIS EXACT FORMAT:
   ]
 }
 IMPORTANT:
-- For social posts, "type" must be "social", "subtype" must be "post" (unless it's a "thread" or "story"), and "platform" MUST be the platform name.
-- For non-social content, "platform" should be null.
+- "type" MUST be one of: "social", "blog", "webpage", "email", "ad".
+- "subtype" logic:
+    - If type="social", subtype="post" (or "thread" / "story").
+    - If type="webpage", subtype MUST be one of: "pricing", "product", "industry", "solution", "landing".
+    - If type="blog", subtype="article".
+    - If type="email", subtype="newsletter" or "outreach".
+- "platform" MUST be the specific platform name for social posts (e.g., "Twitter", "LinkedIn"). For all other types, platform MUST be null.
 `;
 
 
