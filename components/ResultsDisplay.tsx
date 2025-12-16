@@ -167,13 +167,24 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({
           let subtype = item.subtype;
           let platformFromSubtype = null;
 
-          if (subtype && subtype.startsWith('{') && subtype.endsWith('}')) {
+          if (subtype && (subtype.includes('{') || subtype.startsWith('"'))) {
             try {
-              const parsedSubtype = JSON.parse(subtype);
-              subtype = parsedSubtype.original_subtype;
-              platformFromSubtype = parsedSubtype.platform;
+              // Try to parse if it looks like JSON or a quoted string
+              const parsed = JSON.parse(subtype);
+
+              if (typeof parsed === 'object' && parsed !== null) {
+                // It's an object like {"original_subtype":"post"}
+                subtype = parsed.original_subtype || parsed.subtype || Object.values(parsed)[0] || subtype;
+
+                if (parsed.platform) {
+                  platformFromSubtype = parsed.platform;
+                }
+              } else if (typeof parsed === 'string') {
+                // It was just a quoted string like "post"
+                subtype = parsed;
+              }
             } catch (e) {
-              // Not JSON, assume legacy string
+              // Parsing failed, use original string
             }
           }
 
