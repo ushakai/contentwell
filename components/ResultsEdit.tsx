@@ -470,8 +470,8 @@ const ResultsEdit: React.FC<ResultsEditProps> = ({
                 <div className="text-left space-y-1">
                   <p className="font-semibold text-primary text-base">
                     {item.content_type?.toUpperCase()} • {
-                      item.content_type?.toLowerCase() === 'social_post'
-                        ? (extractPlatformFromTitle(item.metadata?.title) || item.subtype)
+                      (item.content_type?.toLowerCase() === 'social_post' || item.content_type?.toLowerCase() === 'social')
+                        ? (item.metadata?.platform || extractPlatformFromTitle(item.metadata?.title) || item.subtype)
                         : item.subtype
                     }
                   </p>
