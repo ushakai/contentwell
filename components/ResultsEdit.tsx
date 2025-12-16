@@ -145,7 +145,42 @@ const ResultsEdit: React.FC<ResultsEditProps> = ({
               metadata = {};
             }
           }
-          return { ...item, metadata: metadata ?? {} };
+
+          // Handle composite subtype (JSON string stored in text column)
+          let subtype = item.subtype;
+          let platformFromSubtype = null;
+
+          if (subtype && (subtype.includes('{') || subtype.startsWith('"'))) {
+            try {
+              // Try to parse if it looks like JSON or a quoted string
+              const parsed = JSON.parse(subtype);
+
+              if (typeof parsed === 'object' && parsed !== null) {
+                // It's an object like {"original_subtype":"post"}
+                subtype = parsed.original_subtype || parsed.subtype || Object.values(parsed)[0] || subtype;
+
+                if (parsed.platform) {
+                  platformFromSubtype = parsed.platform;
+                }
+              } else if (typeof parsed === 'string') {
+                // It was just a quoted string like "post"
+                subtype = parsed;
+              }
+            } catch (e) {
+              // Parsing failed, use original string
+            }
+          }
+
+          // Merge platform found in subtype into metadata for consistency
+          if (platformFromSubtype) {
+            metadata = { ...metadata, platform: platformFromSubtype };
+          }
+
+          return {
+            ...item,
+            subtype,
+            metadata: metadata ?? {}
+          };
         });
 
         // Sort by created_at if possible
