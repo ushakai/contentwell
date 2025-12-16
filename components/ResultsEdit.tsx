@@ -471,7 +471,7 @@ const ResultsEdit: React.FC<ResultsEditProps> = ({
                   <p className="font-semibold text-primary text-base">
                     {item.content_type?.toUpperCase()} • {
                       (item.content_type?.toLowerCase() === 'social_post' || item.content_type?.toLowerCase() === 'social')
-                        ? (item.metadata?.platform || extractPlatformFromTitle(item.metadata?.title) || item.subtype)
+                        ? (item.metadata?.platform || extractPlatformFromTitle(item.metadata?.title) || (item.subtype === 'post' ? 'Social Post' : item.subtype))
                         : item.subtype
                     }
                   </p>

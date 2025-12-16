@@ -137,7 +137,7 @@ export default function ContentPlanningWorkspace({
             let items = result.content.map((c: any) => ({
                 type: c.type,
                 subtype: c.subtype ?? null,
-                platform: c.platform ?? null,
+                platform: c.platform || c.Platform || null,
                 generated_text: c.text,
                 metadata: c.metadata ?? {},
             }));
