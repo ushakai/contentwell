@@ -236,7 +236,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onStartCampaign }) => {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-3">
               <SparklesIcon className="h-8 w-8 text-primary" />
-              <h1 className="text-xl font-bold tracking-tight text-foreground">Purple AI</h1>
+              <h1 className="text-xl font-bold tracking-tight text-foreground">ContentWell</h1>
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-muted-foreground hidden sm:block">

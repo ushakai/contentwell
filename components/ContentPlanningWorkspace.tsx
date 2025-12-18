@@ -94,6 +94,98 @@ export default function ContentPlanningWorkspace({
     }, [campaignId, user]);
 
     // ──────────────────────────────────────────────────────────────
+    // Load existing content if NOT auto-generating (edit mode)
+    // ──────────────────────────────────────────────────────────────
+    useEffect(() => {
+        const loadExistingContent = async () => {
+            if (autoGenerate || !campaign || !user) return;
+            if (hasGenerated.current) return;
+            
+            hasGenerated.current = true;
+            setGenerating(true);
+
+            try {
+                // Fetch existing generated content from database
+                const { data, error } = await supabase
+                    .from("generated_content")
+                    .select("*")
+                    .eq("campaign_id", campaignId)
+                    .eq("user_id", user.id);
+
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    // Process the data to match the expected format
+                    const items = data.map((item: any) => {
+                        let metadata = item.metadata;
+                        if (typeof metadata === "string") {
+                            try {
+                                metadata = JSON.parse(metadata);
+                            } catch {
+                                metadata = {};
+                            }
+                        }
+
+                        // Handle composite subtype (JSON string stored in text column)
+                        let subtype = item.subtype;
+                        let platformFromSubtype = null;
+
+                        if (subtype && (subtype.includes('{') || subtype.startsWith('"'))) {
+                            try {
+                                const parsed = JSON.parse(subtype);
+                                if (typeof parsed === 'object' && parsed !== null) {
+                                    subtype = parsed.original_subtype || parsed.subtype || Object.values(parsed)[0] || subtype;
+                                    if (parsed.platform) {
+                                        platformFromSubtype = parsed.platform;
+                                    }
+                                } else if (typeof parsed === 'string') {
+                                    subtype = parsed;
+                                }
+                            } catch (e) {
+                                // Parsing failed, use original string
+                            }
+                        }
+
+                        // Merge platform found in subtype into metadata
+                        if (platformFromSubtype) {
+                            metadata = { ...metadata, platform: platformFromSubtype };
+                        }
+
+                        return {
+                            type: item.content_type,
+                            subtype: subtype,
+                            platform: metadata.platform || platformFromSubtype || null,
+                            generated_text: item.generated_text,
+                            metadata: metadata ?? {},
+                        };
+                    });
+
+                    setGeneratedItems(items);
+                    setMode("results");
+
+                    // Initialize image states for items that already have images
+                    const initialImageStates: { [key: number]: { loading: boolean; url: string | null } } = {};
+                    items.forEach((item: any, index: number) => {
+                        if (item.metadata?.generated_image_url) {
+                            initialImageStates[index] = {
+                                loading: false,
+                                url: item.metadata.generated_image_url
+                            };
+                        }
+                    });
+                    setImageStates(initialImageStates);
+                }
+            } catch (err) {
+                console.error("Failed to load existing content:", err);
+            } finally {
+                setGenerating(false);
+            }
+        };
+
+        loadExistingContent();
+    }, [campaign, autoGenerate, campaignId, user]);
+
+    // ──────────────────────────────────────────────────────────────
     // Trigger auto-generation if enabled
     // ──────────────────────────────────────────────────────────────
     useEffect(() => {
@@ -190,7 +282,8 @@ export default function ContentPlanningWorkspace({
 
     // ──────────────────────────────────────────────────────────────
     // approveAndSaveAll
-    // Uploads generated images and saves all content to the database
+    // Uploads generated images and saves/updates all content in the database
+    // In edit mode (autoGenerate=false), it DELETES old content and inserts new
     // ──────────────────────────────────────────────────────────────
     const approveAndSaveAll = async () => {
         setSaving(true);
@@ -255,7 +348,23 @@ export default function ContentPlanningWorkspace({
 
             setSaveMessage("Saving to database...");
 
-            // Batch insert all items
+            // Check if we're in edit mode (updating existing content)
+            if (!autoGenerate) {
+                // EDIT MODE: Delete all existing content for this campaign, then insert new
+                setSaveMessage("Removing old content...");
+                
+                const { error: deleteError } = await supabase
+                    .from("generated_content")
+                    .delete()
+                    .eq("campaign_id", campaign.id)
+                    .eq("user_id", user?.id);
+
+                if (deleteError) throw deleteError;
+                
+                setSaveMessage("Saving updated content...");
+            }
+
+            // Insert all items (works for both new and edit mode after deletion)
             const { error } = await supabase.from("generated_content").insert(finalItems);
             if (error) throw error;
 
@@ -338,15 +447,17 @@ export default function ContentPlanningWorkspace({
             )}
 
             {/* MAIN CONTENT WRAPPER */}
-            <div
-                className={`max-w-7xl mx-auto p-8 space-y-12 text-foreground relative ${saving ? "pointer-events-none opacity-40" : ""
-                    }`}
-            >
-                <div className="text-center">
-                    <h1 className="text-5xl font-bold">
-                        {campaign?.name ?? "Content Review"}
-                    </h1>
-                </div>
+            <div className="max-w-7xl mx-auto p-8">
+                <div className="bg-card rounded-3xl shadow-xl border border-border p-10">
+                    <div
+                        className={`space-y-12 text-foreground relative ${saving ? "pointer-events-none opacity-40" : ""
+                            }`}
+                    >
+                        <div className="text-center">
+                            <h1 className="text-5xl font-bold">
+                                {campaign?.name ?? "Content Review"}
+                            </h1>
+                        </div>
 
                 {/* GENERATING LOADER - Shows while AI is generating content */}
                 {generating && (
@@ -359,7 +470,7 @@ export default function ContentPlanningWorkspace({
                 )}
 
                 {/* CONTENT REVIEW LIST - Displays generated items grouped by type */}
-                {campaign?.mode === "review" && generatedItems.length > 0 && (
+                {!generating && generatedItems.length > 0 && (
                     <>
                         <div className="space-y-10">
 
@@ -380,22 +491,37 @@ export default function ContentPlanningWorkspace({
                                             return (
                                                 <div
                                                     key={typeIndex}
-                                                    className="border border-border rounded-2xl bg-card shadow p-6"
+                                                    className="border-2 border-primary/20 rounded-2xl bg-gradient-to-br from-card to-card/80 shadow-lg hover:shadow-xl transition-shadow p-8"
                                                 >
                                                     {/* TYPE HEADER - Collapsible */}
                                                     <button
-                                                        className="w-full flex justify-between items-center text-left"
+                                                        className="w-full flex justify-between items-center text-left group hover:bg-muted/30 -mx-2 px-2 py-3 rounded-xl transition-all"
                                                         onClick={() => setOpenType(openType === type ? null : type)}
                                                     >
-                                                        <h2 className="text-2xl font-bold capitalize">{type.replace("_", " ")}</h2>
-                                                        <span className="text-primary text-xl">
-                                                            {openType === type ? "▲" : "▼"}
-                                                        </span>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-all">
+                                                                <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                </svg>
+                                                            </div>
+                                                            <div>
+                                                                <h2 className="text-2xl font-bold capitalize text-foreground">{type.replace("_", " ")}</h2>
+                                                                <p className="text-sm text-muted-foreground">{items.length} {items.length === 1 ? 'item' : 'items'}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${openType === type ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                                                                {openType === type ? 'Expanded' : 'Collapsed'}
+                                                            </span>
+                                                            <svg className={`w-6 h-6 text-primary transition-transform duration-300 ${openType === type ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                            </svg>
+                                                        </div>
                                                     </button>
 
                                                     {/* TYPE CONTENT */}
                                                     {openType === type && (
-                                                        <div className="mt-6 space-y-8">
+                                                        <div className="mt-8 space-y-6 animate-fade-in-up">
                                                             {items.map((item, i) => {
                                                                 const subtype = item.subtype || "default";
                                                                 const label = item.platform
@@ -410,132 +536,170 @@ export default function ContentPlanningWorkspace({
                                                                 return (
                                                                     <div
                                                                         key={i}
-                                                                        className="border border-border rounded-xl bg-background p-6"
+                                                                        className={`border-2 rounded-xl bg-background/50 backdrop-blur-sm transition-all ${isOpen ? 'border-primary shadow-lg' : 'border-border hover:border-primary/50'}`}
                                                                     >
                                                                         {/* SUBTYPE HEADER - Collapsible */}
                                                                         <button
-                                                                            className="w-full flex justify-between items-center text-left"
+                                                                            className="w-full flex justify-between items-center text-left p-5 hover:bg-muted/30 rounded-xl transition-all group"
                                                                             onClick={() =>
                                                                                 setOpenSubtype(isOpen ? null : subKey)
                                                                             }
                                                                         >
-                                                                            <h3 className="text-lg font-semibold text-primary">
-                                                                                {capitalizeLabel(label)}
-                                                                            </h3>
-                                                                            <span className="text-primary">
-                                                                                {isOpen ? "▲" : "▼"}
-                                                                            </span>
+                                                                            <div className="flex items-center gap-3">
+                                                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${isOpen ? 'bg-primary text-primary-foreground' : 'bg-primary/10 text-primary group-hover:bg-primary/20'}`}>
+                                                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                                                                                    </svg>
+                                                                                </div>
+                                                                                <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors">
+                                                                                    {capitalizeLabel(label)}
+                                                                                </h3>
+                                                                            </div>
+                                                                            <svg className={`w-5 h-5 text-primary transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                                            </svg>
                                                                         </button>
 
-                                                                        {/* COLLAPSIBLE SUBTYPE CONTENT */}
-                                                                        <div
-                                                                            className={`overflow-hidden transition-all duration-300 ease-in-out ${isOpen ? "max-h-[1500px] mt-6" : "max-h-[2000px]"
-                                                                                }`}
-                                                                        >
-                                                                            {/* TEXTAREA PREVIEW - Editable */}
-                                                                            <div className="space-y-3">
-                                                                                <textarea
-                                                                                    className="w-full p-4 border border-border rounded-xl text-lg bg-background text-foreground leading-relaxed"
-                                                                                    rows={isOpen ? 15 : 4} // compact preview
-                                                                                    value={item.generated_text}
-                                                                                    onChange={(e) => {
-                                                                                        const updated = [...generatedItems];
-                                                                                        updated[item.__idx].generated_text = e.target.value;
-                                                                                        setGeneratedItems(updated);
-
-                                                                                    }}
-                                                                                />
-                                                                            </div>
-
-                                                                            {/* IMAGE BLOCK - If item needs an image */}
-                                                                            {item.metadata?.image_prompt && (
-                                                                                <div className="mt-6 p-6 bg-gradient-to-r from-purple-500/10 to-blue-500/10 rounded-2xl border border-primary/20">
-                                                                                    <h4 className="font-semibold text-foreground mb-4">
-                                                                                        Image Prompt for:{" "}
-                                                                                        <span className="text-primary font-bold">
-                                                                                            {label}
-                                                                                        </span>
-                                                                                    </h4>
-
-                                                                                    {/* Editable Image Prompt */}
+                                                                        {/* COLLAPSIBLE SUBTYPE CONTENT - Only show when expanded */}
+                                                                        {isOpen && (
+                                                                            <div className="mt-6 pt-6 border-t border-border space-y-8 animate-fade-in-up">
+                                                                                {/* TEXTAREA - Editable Generated Text */}
+                                                                                <div className="space-y-4">
+                                                                                    <label className="block text-sm font-semibold text-foreground">
+                                                                                        Generated Content
+                                                                                    </label>
                                                                                     <textarea
-                                                                                        className="w-full p-4 border border-border rounded-xl bg-background text-foreground mb-4"
-                                                                                        rows={4}
-                                                                                        value={item.metadata.image_prompt}
+                                                                                        className="w-full p-5 border-2 border-border rounded-xl text-base bg-background text-foreground leading-relaxed focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                                                                        rows={12}
+                                                                                        value={item.generated_text}
                                                                                         onChange={(e) => {
                                                                                             const updated = [...generatedItems];
-                                                                                            updated[item.__idx].metadata.image_prompt = e.target.value;
-
+                                                                                            updated[item.__idx].generated_text = e.target.value;
                                                                                             setGeneratedItems(updated);
                                                                                         }}
+                                                                                        placeholder="Your generated content will appear here..."
                                                                                     />
+                                                                                </div>
 
-                                                                                    {/* Generate Image Button */}
-                                                                                    <button
-                                                                                        onClick={async () => {
-                                                                                            if (!item.metadata.image_prompt.trim()) return;
+                                                                                {/* IMAGE SECTION - If item needs an image */}
+                                                                                {item.metadata?.image_prompt && (
+                                                                                    <div className="p-6 bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-xl border-2 border-primary/30">
+                                                                                        <div className="flex items-center gap-2 mb-4">
+                                                                                            <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                                                            </svg>
+                                                                                            <h4 className="text-lg font-bold text-foreground">
+                                                                                                Image for {capitalizeLabel(label)}
+                                                                                            </h4>
+                                                                                        </div>
 
-                                                                                            if (globalGenerating) {
-                                                                                                alert("Please wait — another generation is in progress.");
-                                                                                                return;
-                                                                                            }
-
-                                                                                            setGlobalGenerating(true);
-                                                                                            setImageStates((prev) => ({
-                                                                                                ...prev,
-                                                                                                [item.__idx]: { loading: true, url: null }
-                                                                                            }));
-
-                                                                                            try {
-                                                                                                const base64Image = await generateImageWithGemini(
-                                                                                                    item.metadata.image_prompt
-                                                                                                );
-
-                                                                                                setImageStates((prev) => ({
-                                                                                                    ...prev,
-                                                                                                    [i]: { loading: false, url: base64Image },
-                                                                                                }));
-
-                                                                                                const updated = [...generatedItems];
-                                                                                                updated[item.__idx].metadata.temp_base64_image = base64Image;
-                                                                                                setGeneratedItems(updated);
-                                                                                            } catch (err) {
-                                                                                                alert("Image generation failed.");
-                                                                                                setImageStates((prev) => ({
-                                                                                                    ...prev,
-                                                                                                    [i]: { loading: false, url: null },
-                                                                                                }));
-                                                                                            } finally {
-                                                                                                setGlobalGenerating(false);
-                                                                                            }
-                                                                                        }}
-                                                                                        disabled={
-                                                                                            globalGenerating ||
-                                                                                            imageStates[i]?.loading ||
-                                                                                            !item.metadata.image_prompt.trim()
-                                                                                        }
-                                                                                        className="px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50"
-                                                                                    >
-                                                                                        {imageStates[i]?.loading
-                                                                                            ? "Generating..."
-                                                                                            : "Generate Image"}
-                                                                                    </button>
-
-                                                                                    {/* Generated Image Preview */}
-                                                                                    {imageStates[i]?.url && (
-                                                                                        <div className="mt-4">
-                                                                                            <img
-                                                                                                src={imageStates[i].url}
-                                                                                                className="w-full rounded-xl border shadow"
-                                                                                                onClick={() =>
-                                                                                                    setModalImage(imageStates[i].url)
-                                                                                                }
+                                                                                        {/* Editable Image Prompt */}
+                                                                                        <div className="space-y-4 mb-6">
+                                                                                            <label className="block text-sm font-semibold text-foreground">
+                                                                                                Image Prompt
+                                                                                            </label>
+                                                                                            <textarea
+                                                                                                className="w-full p-5 border-2 border-border rounded-xl bg-background text-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                                                                                rows={3}
+                                                                                                value={item.metadata.image_prompt}
+                                                                                                onChange={(e) => {
+                                                                                                    const updated = [...generatedItems];
+                                                                                                    updated[item.__idx].metadata.image_prompt = e.target.value;
+                                                                                                    setGeneratedItems(updated);
+                                                                                                }}
+                                                                                                placeholder="Describe the image you want to generate..."
                                                                                             />
                                                                                         </div>
-                                                                                    )}
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
+
+                                                                                        {/* Generate Image Button */}
+                                                                                        <button
+                                                                                            onClick={async () => {
+                                                                                                if (!item.metadata.image_prompt.trim()) return;
+
+                                                                                                if (globalGenerating) {
+                                                                                                    alert("Please wait — another generation is in progress.");
+                                                                                                    return;
+                                                                                                }
+
+                                                                                                setGlobalGenerating(true);
+                                                                                                setImageStates((prev) => ({
+                                                                                                    ...prev,
+                                                                                                    [item.__idx]: { loading: true, url: null }
+                                                                                                }));
+
+                                                                                                try {
+                                                                                                    const base64Image = await generateImageWithGemini(
+                                                                                                        item.metadata.image_prompt
+                                                                                                    );
+
+                                                                                                    setImageStates((prev) => ({
+                                                                                                        ...prev,
+                                                                                                        [item.__idx]: { loading: false, url: base64Image },
+                                                                                                    }));
+
+                                                                                                    const updated = [...generatedItems];
+                                                                                                    updated[item.__idx].metadata.temp_base64_image = base64Image;
+                                                                                                    setGeneratedItems(updated);
+                                                                                                } catch (err) {
+                                                                                                    alert("Image generation failed.");
+                                                                                                    setImageStates((prev) => ({
+                                                                                                        ...prev,
+                                                                                                        [item.__idx]: { loading: false, url: null },
+                                                                                                    }));
+                                                                                                } finally {
+                                                                                                    setGlobalGenerating(false);
+                                                                                                }
+                                                                                            }}
+                                                                                            disabled={
+                                                                                                globalGenerating ||
+                                                                                                imageStates[item.__idx]?.loading ||
+                                                                                                !item.metadata.image_prompt.trim()
+                                                                                            }
+                                                                                            className="w-full sm:w-auto px-8 py-3 bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                                                                                        >
+                                                                                            {imageStates[item.__idx]?.loading ? (
+                                                                                                <>
+                                                                                                    <LoaderIcon />
+                                                                                                    <span>Generating Image...</span>
+                                                                                                </>
+                                                                                            ) : (
+                                                                                                <>
+                                                                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                                                                                    </svg>
+                                                                                                    <span>Generate Image</span>
+                                                                                                </>
+                                                                                            )}
+                                                                                        </button>
+
+                                                                                        {/* Generated Image Preview - Only show for THIS item */}
+                                                                                        {imageStates[item.__idx]?.url && (
+                                                                                            <div className="mt-8 space-y-4">
+                                                                                                <label className="block text-sm font-semibold text-foreground">
+                                                                                                    Generated Image Preview
+                                                                                                </label>
+                                                                                                <div className="relative group">
+                                                                                                    <img
+                                                                                                        src={imageStates[item.__idx].url}
+                                                                                                        alt="Generated content"
+                                                                                                        className="w-full h-auto rounded-xl border-2 border-primary shadow-xl cursor-pointer transition-transform hover:scale-[1.02]"
+                                                                                                        onClick={() => setModalImage(imageStates[item.__idx].url)}
+                                                                                                    />
+                                                                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 rounded-xl transition-all flex items-center justify-center">
+                                                                                                        <svg className="w-12 h-12 text-white opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                                                                                                        </svg>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                                <p className="text-xs text-muted-foreground text-center">
+                                                                                                    Click image to view fullscreen
+                                                                                                </p>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 );
                                                             })}
@@ -585,6 +749,8 @@ export default function ContentPlanningWorkspace({
                         </div>
                     </div>
                 )}
+                    </div>
+                </div>
             </div>
         </>
     );

@@ -102,15 +102,16 @@ const CampaignWorkspace: React.FC<CampaignWorkspaceProps> = ({
       return <p className="text-center py-20 text-muted-foreground">Loading…</p>;
     }
 
-    // 3️⃣ If old campaign WITH results → show ResultsDisplay OR ResultsEdit
+    // 3️⃣ If old campaign WITH results → show ContentPlanningWorkspace (edit mode) OR ResultsDisplay
     if (hasExistingData === true) {
-      console.log(`[CampaignWorkspace] Showing: ${isEditMode ? 'ResultsEdit' : 'ResultsDisplay'}`);
+      console.log(`[CampaignWorkspace] Showing: ${isEditMode ? 'ContentPlanningWorkspace (Edit Mode)' : 'ResultsDisplay'}`);
 
       if (isEditMode) {
         return (
-          <ResultsEdit
+          <ContentPlanningWorkspace
             campaignId={currentCampaignId}
-            onStartOver={onExit}
+            autoGenerate={false}
+            onExit={onExit}
           />
         );
       }
@@ -134,9 +135,12 @@ const CampaignWorkspace: React.FC<CampaignWorkspaceProps> = ({
     );
   };
 
-  // Determine the title based on the state
-  const title =
-    hasExistingData === true ? "Your Generated Content" : "AI Content Generation";
+  // Determine which component we're rendering
+  const isShowingContentPlanning = (!currentCampaignId || currentCampaignId === 0) || 
+                                     (hasExistingData === false) || 
+                                     (hasExistingData === true && isEditMode);
+  
+  const isShowingResultsDisplay = hasExistingData === true && !isEditMode;
 
   return (
     <div className="min-h-screen bg-background">
@@ -146,8 +150,8 @@ const CampaignWorkspace: React.FC<CampaignWorkspaceProps> = ({
           <div className="flex items-center space-x-4">
             <SparklesIcon className="h-10 w-10 text-primary" />
             <div>
-              <h1 className="text-xl font-bold text-foreground">Purple AI</h1>
-              <p className="text-sm text-muted-foreground">Powered by Gemini 1.5 Pro</p>
+              <h1 className="text-xl font-bold text-foreground">ContentWell</h1>
+              <p className="text-sm text-muted-foreground">Powered by Gemini AI</p>
             </div>
           </div>
 
@@ -161,10 +165,13 @@ const CampaignWorkspace: React.FC<CampaignWorkspaceProps> = ({
       </div>
 
       {/* BODY */}
-      <div className="max-w-7xl mx-auto p-8">
-        <div className="bg-card rounded-3xl shadow-xl border border-border">
-          <div className="p-10">
-            <h2 className="text-4xl font-bold text-center mb-12">{title}</h2>
+      <div className={isShowingContentPlanning ? "" : "max-w-7xl mx-auto p-8"}>
+        <div className={isShowingContentPlanning ? "" : "bg-card rounded-3xl shadow-xl border border-border"}>
+          <div className={isShowingContentPlanning ? "" : "p-10"}>
+            {/* Only show title for ResultsDisplay, not for ContentPlanningWorkspace */}
+            {isShowingResultsDisplay && (
+              <h2 className="text-4xl font-bold text-center mb-12">Your Generated Content</h2>
+            )}
             {renderContent()}
           </div>
         </div>
