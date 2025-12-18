@@ -562,7 +562,7 @@ export default function ContentPlanningWorkspace({
 
                                                                         {/* COLLAPSIBLE SUBTYPE CONTENT - Only show when expanded */}
                                                                         {isOpen && (
-                                                                            <div className="mt-6 pt-6 border-t border-border space-y-8 animate-fade-in-up">
+                                                                            <div className="mt-6 pt-6 px-6 pb-6 border-t border-border space-y-8 animate-fade-in-up bg-muted/20 rounded-b-xl">
                                                                                 {/* TEXTAREA - Editable Generated Text */}
                                                                                 <div className="space-y-4">
                                                                                     <label className="block text-sm font-semibold text-foreground">

@@ -136,11 +136,12 @@ const CampaignWorkspace: React.FC<CampaignWorkspaceProps> = ({
   };
 
   // Determine which component we're rendering
-  const isShowingContentPlanning = (!currentCampaignId || currentCampaignId === 0) || 
-                                     (hasExistingData === false) || 
-                                     (hasExistingData === true && isEditMode);
-  
+  const isShowingCampaignForm = !currentCampaignId || currentCampaignId === 0;
+  const isShowingContentPlanning = (hasExistingData === false) || (hasExistingData === true && isEditMode);
   const isShowingResultsDisplay = hasExistingData === true && !isEditMode;
+  
+  // CampaignDetailsForm and ResultsDisplay need the wrapper, ContentPlanningWorkspace doesn't
+  const needsWrapper = isShowingCampaignForm || isShowingResultsDisplay;
 
   return (
     <div className="min-h-screen bg-background">
@@ -165,12 +166,16 @@ const CampaignWorkspace: React.FC<CampaignWorkspaceProps> = ({
       </div>
 
       {/* BODY */}
-      <div className={isShowingContentPlanning ? "" : "max-w-7xl mx-auto p-8"}>
-        <div className={isShowingContentPlanning ? "" : "bg-card rounded-3xl shadow-xl border border-border"}>
-          <div className={isShowingContentPlanning ? "" : "p-10"}>
-            {/* Only show title for ResultsDisplay, not for ContentPlanningWorkspace */}
+      <div className={needsWrapper ? "max-w-7xl mx-auto p-8" : ""}>
+        <div className={needsWrapper ? "bg-card rounded-3xl shadow-xl border border-border" : ""}>
+          <div className={needsWrapper ? "p-10" : ""}>
+            {/* Show title for ResultsDisplay */}
             {isShowingResultsDisplay && (
               <h2 className="text-4xl font-bold text-center mb-12">Your Generated Content</h2>
+            )}
+            {/* Show title for CampaignDetailsForm */}
+            {isShowingCampaignForm && (
+              <h2 className="text-4xl font-bold text-center mb-12">Create New Campaign</h2>
             )}
             {renderContent()}
           </div>
