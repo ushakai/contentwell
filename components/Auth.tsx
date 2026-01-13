@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { signUp, signIn } from '../services/authService';
-import SparklesIcon from './icons/SparklesIcon';
 
 const Auth: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -58,7 +57,6 @@ const Auth: React.FC = () => {
       <div className="w-full max-w-md p-8 space-y-8 bg-card rounded-lg shadow-sm border">
         <div className="text-center">
             <div className="flex items-center justify-center space-x-3 mb-4">
-                <SparklesIcon className="h-10 w-10 text-primary"/>
                 <h1 className="text-3xl font-bold tracking-tight text-foreground">ContentWell</h1>
             </div>
           <p className="text-muted-foreground">{isLogin ? 'Sign in to your account' : 'Create a new account'}</p>

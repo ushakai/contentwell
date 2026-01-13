@@ -36,8 +36,6 @@ export default function ContentPlanningWorkspace({
 }) {
     const { user } = useAuth();
 
-    // State for showing the save confirmation modal
-    const [showConfirmSave, setShowConfirmSave] = useState(false);
 
     // State for managing the expanded/collapsed sections in the review UI
     const [openType, setOpenType] = React.useState<string | null>(null);
@@ -195,27 +193,101 @@ export default function ContentPlanningWorkspace({
         generateAllContent();
     }, [campaign, autoGenerate]);
 
+
     // ──────────────────────────────────────────────────────────────
-    // Unsaved Changes Warning
+    // saveContentToDatabase
+    // Helper function to save content items to database
     // ──────────────────────────────────────────────────────────────
-    useEffect(() => {
-        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-            if (generatedItems.length > 0 && !saving) {
-                e.preventDefault();
-                e.returnValue = ""; // Chrome requires returnValue to be set
+    const saveContentToDatabase = async (itemsToSave: any[], isEditMode: boolean = false) => {
+        if (!campaign) return;
+
+        setSaving(true);
+        setSaveMessage("Saving content...");
+
+        try {
+            const finalItems = [];
+
+            for (let i = 0; i < itemsToSave.length; i++) {
+                const item = itemsToSave[i];
+                let savedPath = null;
+
+                setSaveMessage(`Processing item ${i + 1} of ${itemsToSave.length}...`);
+
+                // Upload base64 image if present
+                if (item.metadata?.temp_base64_image) {
+                    const uploadPath = `campaign_${campaign.id}/item_${i}_${Date.now()}.png`;
+                    const publicUrl = await uploadBase64Image(
+                        item.metadata.temp_base64_image,
+                        uploadPath
+                    );
+                    savedPath = uploadPath;
+                    item.metadata.generated_image_url = publicUrl;
+                    delete item.metadata.temp_base64_image;
+                }
+
+                // Normalize: Check if subtype is actually a platform name
+                const knownPlatforms = ['facebook', 'twitter', 'linkedin', 'instagram', 'x'];
+                const isSubtypePlatform = item.subtype && knownPlatforms.includes(item.subtype.toLowerCase());
+
+                const finalSubtype = isSubtypePlatform ? 'post' : item.subtype;
+                const finalPlatform = item.platform || (isSubtypePlatform ? item.subtype : null);
+
+                // Encode both fields into the subtype column as a JSON string
+                const compositeSubtype = JSON.stringify({
+                    original_subtype: finalSubtype,
+                    platform: finalPlatform
+                });
+
+                finalItems.push({
+                    campaign_id: campaign.id,
+                    user_id: user?.id,
+                    content_type: item.type,
+                    subtype: compositeSubtype,
+                    generated_text: item.generated_text,
+                    metadata: {
+                        ...item.metadata,
+                        platform: finalPlatform
+                    },
+                    generated_image_path: savedPath,
+                });
             }
-        };
 
-        window.addEventListener("beforeunload", handleBeforeUnload);
+            setSaveMessage("Saving to database...");
 
-        return () => {
-            window.removeEventListener("beforeunload", handleBeforeUnload);
-        };
-    }, [generatedItems, saving]);
+            // If in edit mode, delete old content first
+            if (isEditMode) {
+                const { error: deleteError } = await supabase
+                    .from("generated_content")
+                    .delete()
+                    .eq("campaign_id", campaign.id)
+                    .eq("user_id", user?.id);
+                if (deleteError) throw deleteError;
+            }
+
+            // Insert all items
+            const { error } = await supabase.from("generated_content").insert(finalItems);
+            if (error) throw error;
+
+            setSaveMessage("Successfully saved!");
+            setTimeout(() => {
+                setSaving(false);
+                setSaveMessage("");
+            }, 1000);
+
+        } catch (err) {
+            setSaveMessage("Failed to save. Please try again.");
+            console.error(err);
+            setTimeout(() => {
+                setSaving(false);
+                setSaveMessage("");
+            }, 2000);
+        }
+    };
 
     // ──────────────────────────────────────────────────────────────
     // generateAllContent
     // Calls the Gemini service to generate content based on campaign details
+    // Automatically saves content to database after generation
     // ──────────────────────────────────────────────────────────────
     const generateAllContent = async () => {
         if (!campaign) return;
@@ -234,155 +306,18 @@ export default function ContentPlanningWorkspace({
                 metadata: c.metadata ?? {},
             }));
 
-            // If in "review" mode (manual review), just set state and show results
-            if (campaign.mode === "review") {
-                setGeneratedItems(items);
-                setMode("results");
-                setGenerating(false);
-                return;
-            }
-
-            // If in "auto" mode (skip review), insert directly into database
-            // (Note: The current logic seems to default to review mode behavior mostly, 
-            // but this block handles the immediate DB insert if configured)
-            const dbItems = items.map((item: any) => {
-                // Normalize: Check if subtype is actually a platform name
-                const knownPlatforms = ['facebook', 'twitter', 'linkedin', 'instagram', 'x'];
-                const isSubtypePlatform = item.subtype && knownPlatforms.includes(item.subtype.toLowerCase());
-
-                const finalSubtype = isSubtypePlatform ? 'post' : item.subtype;
-                const finalPlatform = item.platform || (isSubtypePlatform ? item.subtype : null);
-
-                // Encode both fields into the subtype column as a JSON string
-                const compositeSubtype = JSON.stringify({
-                    original_subtype: finalSubtype,
-                    platform: finalPlatform
-                });
-
-                return {
-                    campaign_id: campaign.id,
-                    user_id: user?.id,
-                    content_type: item.type,
-                    subtype: compositeSubtype, // Storing JSON string here
-                    generated_text: item.generated_text,
-                    metadata: {
-                        ...item.metadata,
-                        platform: finalPlatform
-                    },
-                };
-            });
-
-            await supabase.from("generated_content").insert(dbItems);
-            setGeneratedItems(dbItems);
+            // Set items in state for display
+            setGeneratedItems(items);
             setMode("results");
+
+            // Automatically save content to database
+            await saveContentToDatabase(items, !autoGenerate);
+
         } finally {
             setGenerating(false);
         }
     };
 
-    // ──────────────────────────────────────────────────────────────
-    // approveAndSaveAll
-    // Uploads generated images and saves/updates all content in the database
-    // In edit mode (autoGenerate=false), it DELETES old content and inserts new
-    // ──────────────────────────────────────────────────────────────
-    const approveAndSaveAll = async () => {
-        setSaving(true);
-        setSaveMessage("Uploading images and saving content...");
-
-        try {
-            const finalItems = [];
-
-            for (let i = 0; i < generatedItems.length; i++) {
-                const item = generatedItems[i];
-                let finalImageUrl = item.metadata.generated_image_url;
-                let savedPath = null;
-
-                // Update progress message
-                setSaveMessage(`Processing item ${i + 1} of ${generatedItems.length}...`);
-
-                // Upload base64 image if present
-                if (item.metadata.temp_base64_image) {
-                    const uploadPath = `campaign_${campaign.id}/item_${i}_${Date.now()}.png`;
-
-                    const publicUrl = await uploadBase64Image(
-                        item.metadata.temp_base64_image,
-                        uploadPath
-                    );
-
-                    finalImageUrl = publicUrl;
-                    savedPath = uploadPath;
-
-                    item.metadata.generated_image_url = publicUrl;
-                    delete item.metadata.temp_base64_image;
-                }
-
-                // Normalize: Check if subtype is actually a platform name (Legacy fix)
-                const knownPlatforms = ['facebook', 'twitter', 'linkedin', 'instagram', 'x'];
-                const isSubtypePlatform = item.subtype && knownPlatforms.includes(item.subtype.toLowerCase());
-
-                const finalSubtype = isSubtypePlatform ? 'post' : item.subtype;
-                const finalPlatform = item.platform || (isSubtypePlatform ? item.subtype : null);
-
-                // Encode both fields into the subtype column as a JSON string
-                // This is a workaround since we cannot add new columns to the schema
-                const compositeSubtype = JSON.stringify({
-                    original_subtype: finalSubtype,
-                    platform: finalPlatform
-                });
-
-                // Prepare item for database insertion
-                finalItems.push({
-                    campaign_id: campaign.id,
-                    user_id: user?.id,
-                    content_type: item.type,
-                    subtype: compositeSubtype, // Storing JSON string here
-                    generated_text: item.generated_text,
-                    metadata: {
-                        ...item.metadata,
-                        platform: finalPlatform // Ensure platform is saved in metadata
-                    },
-                    generated_image_path: savedPath,
-                });
-
-            }
-
-            setSaveMessage("Saving to database...");
-
-            // Check if we're in edit mode (updating existing content)
-            if (!autoGenerate) {
-                // EDIT MODE: Delete all existing content for this campaign, then insert new
-                setSaveMessage("Removing old content...");
-                
-                const { error: deleteError } = await supabase
-                    .from("generated_content")
-                    .delete()
-                    .eq("campaign_id", campaign.id)
-                    .eq("user_id", user?.id);
-
-                if (deleteError) throw deleteError;
-                
-                setSaveMessage("Saving updated content...");
-            }
-
-            // Insert all items (works for both new and edit mode after deletion)
-            const { error } = await supabase.from("generated_content").insert(finalItems);
-            if (error) throw error;
-
-            setSaveMessage("Successfully saved!");
-
-            // Delay exit to show success message
-            setTimeout(() => {
-                setSaving(false);
-                onExit();
-            }, 1000);
-
-        } catch (err) {
-            setSaveMessage("Failed to save. Please try again.");
-            console.error(err);
-
-            setTimeout(() => setSaving(false), 1500);
-        }
-    };
 
     // ──────────────────────────────────────────────────────────────
     // Early returns for loading and error states
@@ -415,36 +350,6 @@ export default function ContentPlanningWorkspace({
                 </div>
             )}
 
-            {/* CONFIRMATION MODAL - Confirms before saving all content */}
-            {showConfirmSave && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50">
-                    <div className="bg-card text-foreground p-10 rounded-2xl shadow-xl w-[400px] text-center border border-border">
-                        <h2 className="text-2xl font-bold mb-6">Save All Content?</h2>
-                        <p className="text-muted-foreground mb-10">
-                            Are you sure you want to approve & save all generated content?
-                        </p>
-
-                        <div className="flex justify-center gap-6">
-                            <button
-                                onClick={() => setShowConfirmSave(false)}
-                                className="px-6 py-3 rounded-xl bg-muted text-foreground hover:bg-muted/80"
-                            >
-                                No
-                            </button>
-
-                            <button
-                                onClick={() => {
-                                    setShowConfirmSave(false);
-                                    approveAndSaveAll();
-                                }}
-                                className="px-6 py-3 rounded-xl bg-green-600 text-white hover:bg-green-700"
-                            >
-                                Yes, Save
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* MAIN CONTENT WRAPPER */}
             <div className="max-w-7xl mx-auto p-8">
@@ -713,17 +618,6 @@ export default function ContentPlanningWorkspace({
                             })()}
                         </div>
 
-                        {/* APPROVE & SAVE BUTTON */}
-                        <div className="text-center pt-10">
-                            <button
-                                onClick={() => setShowConfirmSave(true)}
-                                disabled={saving}
-                                className="px-10 py-4 bg-green-600 text-white rounded-xl shadow 
-                         hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {saving ? "Saving..." : "Approve & Save All Content"}
-                            </button>
-                        </div>
                     </>
                 )}
 

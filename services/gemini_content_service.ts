@@ -147,30 +147,6 @@ IMPORTANT:
 
   const parsed = JSON.parse(cleaned);
 
-  // ──────────────────────────────────────────
-  // CREATE A TXT FILE (input + output)
-  // ──────────────────────────────────────────
-  const textFileContent =
-    `===== INPUT PROMPT =====
-
-${prompt}
-
-===== OUTPUT FROM GEMINI =====
-
-${cleaned}
-`;
-
-  const blob = new Blob([textFileContent], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
-
-  // Auto-download
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `gemini_output_${Date.now()}.txt`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-
   return parsed;
 }
 

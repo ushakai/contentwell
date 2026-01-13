@@ -3,7 +3,6 @@ import CampaignDetailsForm from "./CampaignDetailsForm";
 import ContentPlanningWorkspace from "./ContentPlanningWorkspace";
 import ResultsDisplay from "./ResultsDisplay";
 import ResultsEdit from "./ResultsEdit";
-import SparklesIcon from "./icons/SparklesIcon";
 import { supabase } from "../utils/supabaseClient";
 
 // Props interface for CampaignWorkspace
@@ -149,7 +148,6 @@ const CampaignWorkspace: React.FC<CampaignWorkspaceProps> = ({
       <div className="border-b bg-card">
         <div className="max-w-7xl mx-auto px-8 py-6 flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <SparklesIcon className="h-10 w-10 text-primary" />
             <div>
               <h1 className="text-xl font-bold text-foreground">ContentWell</h1>
               <p className="text-sm text-muted-foreground">Powered by Gemini AI</p>

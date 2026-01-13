@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { useAuth } from '../hooks/useAuth';
 import { signOut } from '../services/authService';
-import SparklesIcon from './icons/SparklesIcon';
 import LoaderIcon from './icons/LoaderIcon';
 import SocialConnections from './SocialConnections';
 
@@ -235,7 +234,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onStartCampaign }) => {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-3">
-              <SparklesIcon className="h-8 w-8 text-primary" />
               <h1 className="text-xl font-bold tracking-tight text-foreground">ContentWell</h1>
             </div>
             <div className="flex items-center space-x-4">
